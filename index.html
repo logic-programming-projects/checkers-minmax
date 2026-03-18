@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Шашки — Prolog</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #e8e8e8;
+    color: #2c2c2c;
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+    padding: 32px 20px;
+    gap: 32px;
+  }
+
+  /* ---- Ліва частина: дошка ---- */
+  #board-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+  }
+
+  #board-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #888;
+  }
+
+  canvas {
+    border-radius: 8px;
+    cursor: pointer;
+    display: block;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.10);
+  }
+
+  #status-bar {
+    background: #fff;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #444;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    min-width: 320px;
+    text-align: center;
+    letter-spacing: 0.01em;
+  }
+  #status-bar.thinking { color: #888; }
+  #status-bar.your-turn { color: #2c7a2c; }
+  #status-bar.game-over { color: #c0392b; }
+
+  /* ---- Права частина: панель ---- */
+  #panel {
+    width: 240px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-top: 2px;
+  }
+
+  h1 {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #2c2c2c;
+    letter-spacing: -0.02em;
+  }
+  h1 span { color: #777; font-weight: 400; font-size: 0.85rem; margin-left: 6px; }
+
+  .card {
+    background: #fff;
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: 0.84rem;
+    line-height: 1.7;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  }
+
+  .card-title {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #aaa;
+    margin-bottom: 8px;
+  }
+
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 3px 0;
+    border-bottom: 1px solid #f0f0f0;
+    color: #555;
+  }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-val { font-weight: 600; color: #2c2c2c; }
+
+  .dot-black { display:inline-block; width:10px; height:10px; border-radius:50%; background:#222; margin-right:6px; }
+  .dot-white { display:inline-block; width:10px; height:10px; border-radius:50%; background:#ddd; border:1px solid #bbb; margin-right:6px; }
+
+  select {
+    width: 100%;
+    background: #f5f5f5;
+    color: #2c2c2c;
+    border: 1.5px solid #ddd;
+    border-radius: 7px;
+    padding: 8px 10px;
+    font-size: 0.84rem;
+    cursor: pointer;
+    font-family: inherit;
+    outline: none;
+    margin-top: 4px;
+  }
+  select:focus { border-color: #aaa; }
+
+  button#btn-new {
+    width: 100%;
+    background: #2c2c2c;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+    font-family: inherit;
+    letter-spacing: 0.02em;
+  }
+  button#btn-new:hover  { background: #444; }
+  button#btn-new:active { transform: scale(0.98); }
+
+  .rule-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 3px 0;
+    color: #666;
+    font-size: 0.82rem;
+  }
+  .rule-icon { color: #aaa; flex-shrink: 0; margin-top: 1px; }
+
+  #log {
+    background: #f7f7f7;
+    border: 1.5px solid #e8e8e8;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 0.76rem;
+    color: #888;
+    max-height: 160px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    font-family: 'SF Mono', 'Consolas', monospace;
+    line-height: 1.6;
+  }
+  #log .log-ai   { color: #c0392b; }
+  #log .log-user { color: #2c7a2c; }
+  #log .log-sys  { color: #aaa; }
+</style>
+</head>
+<body>
+
+<div id="board-wrap">
+  <div id="board-label">Шашки · Prolog</div>
+  <canvas id="canvas" width="480" height="480"></canvas>
+  <div id="status-bar">Оберіть колір і натисніть «Нова гра»</div>
+</div>
+
+<div id="panel">
+  <h1>Шашки <span>vs Компʼютер</span></h1>
+
+  <div class="card">
+    <div class="card-title">Ваш колір</div>
+    <select id="player-select">
+      <option value="black">⚫ Чорні (ходять першими)</option>
+      <option value="white">⚪ Білі</option>
+    </select>
+  </div>
+
+  <button id="btn-new">▶ Нова гра</button>
+
+  <div class="card">
+    <div class="card-title">Рахунок</div>
+    <div class="stat-row">
+      <span><span class="dot-black"></span>Чорних шашок</span>
+      <span class="stat-val" id="cnt-black">12</span>
+    </div>
+    <div class="stat-row">
+      <span><span class="dot-white"></span>Білих шашок</span>
+      <span class="stat-val" id="cnt-white">12</span>
+    </div>
+    <div class="stat-row">
+      <span>Ходів зіграно</span>
+      <span class="stat-val" id="move-count">0</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Правила</div>
+    <div class="rule-item"><span class="rule-icon">↗</span> Обов'язкове взяття</div>
+    <div class="rule-item"><span class="rule-icon">⛓</span> Ланцюгові взяття</div>
+    <div class="rule-item"><span class="rule-icon">♛</span> Дамка — вся діагональ</div>
+    <div class="rule-item"><span class="rule-icon">=</span> Нічия після 100 ходів</div>
+  </div>
+
+  <div id="log">Журнал ходів...</div>
+</div>
+
+<script>
+const CELL = 60;
+const API  = 'http://localhost:5500/api';
+
+const CLR = {
+  light:     '#f5ede0',
+  dark:      '#9e6b3f',
+  darkHover: '#7a5230',
+  selected:  '#5aab5a',
+  highlight: '#f0c040',
+  capture:   '#e05555',
+  blackPc:   '#1a1a1a',
+  whitePc:   '#f0f0f0',
+  crown:     '#e8c200',
+};
+
+let state = {
+  board: null, human: 'black', ai: 'white',
+  turn: 'black', selected: null, legal: [],
+  highlights: [], moveCount: 0,
+  gameOver: false, thinking: false,
+};
+
+const canvas = document.getElementById('canvas');
+const ctx    = canvas.getContext('2d');
+
+/* ---- Малювання ---- */
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawBoard();
+  drawHighlights();
+  drawPieces();
+  drawCoords();
+}
+
+function drawBoard() {
+  for (let r = 1; r <= 8; r++) {
+    for (let c = 1; c <= 8; c++) {
+      ctx.fillStyle = (r + c) % 2 === 1 ? CLR.dark : CLR.light;
+      ctx.fillRect((c-1)*CELL, (r-1)*CELL, CELL, CELL);
+    }
+  }
+}
+
+function drawCoords() {
+  ctx.font = '11px Inter, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  for (let i = 1; i <= 8; i++) {
+    // рядки (цифри) — зліва
+    ctx.fillStyle = (i % 2 === 1) ? CLR.light + 'cc' : CLR.dark + 'cc';
+    ctx.fillText(i, 3, (i-1)*CELL + 3);
+    // колонки (літери) — знизу
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(String.fromCharCode(64+i), i*CELL - 3, 480 - 3);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+  }
+}
+
+function drawHighlights() {
+  if (!state.selected) return;
+  const { r, c } = state.selected;
+
+  // Обрана фігура — зелений контур
+  ctx.strokeStyle = CLR.selected;
+  ctx.lineWidth = 3;
+  ctx.strokeRect((c-1)*CELL + 2, (r-1)*CELL + 2, CELL-4, CELL-4);
+
+  // Можливі ходи — кружечки
+  for (const m of state.highlights) {
+    const mx = (m.to_col-1)*CELL + CELL/2;
+    const my = (m.to_row-1)*CELL + CELL/2;
+    const isCapture = m.captures.length > 0;
+    ctx.beginPath();
+    if (isCapture) {
+      ctx.arc(mx, my, CELL*0.35, 0, Math.PI*2);
+      ctx.strokeStyle = CLR.capture;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    } else {
+      ctx.arc(mx, my, CELL*0.18, 0, Math.PI*2);
+      ctx.fillStyle = CLR.highlight + 'dd';
+      ctx.fill();
+    }
+  }
+}
+
+function drawPieces() {
+  if (!state.board) return;
+  for (let r = 1; r <= 8; r++) {
+    for (let c = 1; c <= 8; c++) {
+      const v = cellVal(r, c);
+      if (v === 'empty' || v === 'none') continue;
+      drawPiece(r, c, v);
+    }
+  }
+}
+
+function drawPiece(r, c, val) {
+  const x = (c-1)*CELL + CELL/2;
+  const y = (r-1)*CELL + CELL/2;
+  const rad = CELL * 0.36;
+  const isBlack = val.startsWith('black');
+  const isKing  = val.endsWith('king');
+
+  // Тінь
+  ctx.beginPath();
+  ctx.arc(x+2, y+4, rad, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(0,0,0,0.28)';
+  ctx.fill();
+
+  // Градієнт
+  const grad = ctx.createRadialGradient(x-rad*0.3, y-rad*0.3, rad*0.1, x, y, rad);
+  if (isBlack) {
+    grad.addColorStop(0, '#555');
+    grad.addColorStop(1, '#111');
+  } else {
+    grad.addColorStop(0, '#fff');
+    grad.addColorStop(1, '#ccc');
+  }
+
+  ctx.beginPath();
+  ctx.arc(x, y, rad, 0, Math.PI*2);
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Обводка
+  ctx.strokeStyle = isBlack ? '#000' : '#aaa';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Внутрішнє кільце
+  ctx.beginPath();
+  ctx.arc(x, y, rad * 0.65, 0, Math.PI*2);
+  ctx.strokeStyle = isBlack ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Корона дамки
+  if (isKing) {
+    ctx.font = `bold ${Math.floor(CELL*0.36)}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = CLR.crown;
+    ctx.fillText('♛', x, y+1);
+  }
+}
+
+/* ---- Допоміжні ---- */
+
+function cellVal(r, c) { return state.board[(r-1)*8 + (c-1)]; }
+
+function rcFromEvent(e) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width  / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const x = (e.clientX - rect.left) * scaleX;
+  const y = (e.clientY - rect.top)  * scaleY;
+  return { r: Math.floor(y/CELL)+1, c: Math.floor(x/CELL)+1 };
+}
+
+function log(msg, type='sys') {
+  const el = document.getElementById('log');
+  const line = document.createElement('div');
+  line.className = 'log-' + type;
+  line.textContent = msg;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+function clearLog() { document.getElementById('log').innerHTML = ''; }
+
+function setStatus(msg, cls='') {
+  const el = document.getElementById('status-bar');
+  el.textContent = msg;
+  el.className = cls;
+}
+
+function updateCounters() {
+  if (!state.board) return;
+  let b=0, w=0;
+  for (const v of state.board) {
+    if (v.startsWith('black')) b++;
+    if (v.startsWith('white')) w++;
+  }
+  document.getElementById('cnt-black').textContent = b;
+  document.getElementById('cnt-white').textContent = w;
+  document.getElementById('move-count').textContent = state.moveCount;
+}
+
+/* ---- API ---- */
+
+async function fetchLegal() {
+  try {
+    const r = await fetch(`${API}/legal`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ board: state.board, player: state.turn }),
+    });
+    return (await r.json()).moves || [];
+  } catch(e) { log('Помилка: '+e.message); return []; }
+}
+
+async function sendMove(fr, fc, tr, tc) {
+  try {
+    const r = await fetch(`${API}/move`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        board: state.board, player: state.human,
+        move_count: state.moveCount,
+        from_row: fr, from_col: fc, to_row: tr, to_col: tc,
+      }),
+    });
+    return await r.json();
+  } catch(e) { log('Помилка: '+e.message); return null; }
+}
+
+/* ---- Обробники ---- */
+
+document.getElementById('btn-new').addEventListener('click', async () => {
+  state.human     = document.getElementById('player-select').value;
+  state.ai        = state.human === 'black' ? 'white' : 'black';
+  state.turn      = 'black';
+  state.moveCount = 0;
+  state.gameOver  = state.thinking = false;
+  state.selected  = null; state.highlights = [];
+  clearLog();
+  state.board = initialBoard();
+  draw(); updateCounters();
+
+  if (state.human === 'white') {
+    await aiOnlyMove();
+  } else {
+    state.legal = await fetchLegal();
+    setStatus('Ваш хід — оберіть чорну шашку', 'your-turn');
+    log('Нова гра. Ви — чорні ⚫', 'sys');
+  }
+});
+
+async function aiOnlyMove() {
+  state.thinking = true;
+  setStatus('Компʼютер думає…', 'thinking');
+  try {
+    const resp = await fetch(`${API}/move`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        board: state.board, player: state.human,
+        move_count: state.moveCount,
+        from_row: -1, from_col: -1, to_row: -1, to_col: -1,
+      }),
+    });
+    const data = await resp.json();
+    if (data) await processResponse(data, true);
+  } catch(e) { log('Помилка: '+e.message); }
+  state.thinking = false;
+}
+
+canvas.addEventListener('click', async (e) => {
+  if (state.gameOver || state.thinking || !state.board) return;
+  if (state.turn !== state.human) return;
+  const { r, c } = rcFromEvent(e);
+  const v = cellVal(r, c);
+
+  if (v && v !== 'empty' && v !== 'none' && v.startsWith(state.human)) {
+    state.selected = { r, c };
+    state.highlights = state.legal.filter(m => m.from_row===r && m.from_col===c);
+    draw();
+    return;
+  }
+
+  if (state.selected) {
+    const m = state.highlights.find(mv => mv.to_row===r && mv.to_col===c);
+    if (m) {
+      state.thinking = true;
+      state.selected = null; state.highlights = [];
+      setStatus('Компʼютер думає…', 'thinking');
+      draw();
+      const data = await sendMove(m.from_row, m.from_col, m.to_row, m.to_col);
+      if (data) await processResponse(data, false);
+      state.thinking = false;
+    } else {
+      state.selected = null; state.highlights = [];
+      draw();
+    }
+  }
+});
+
+async function processResponse(data, aiOnly) {
+  state.board     = data.board;
+  state.moveCount = data.move_count;
+
+  if (!aiOnly) log('Ваш хід', 'user');
+  if (data.ai_move && data.ai_move !== null) {
+    const m = data.ai_move;
+    const cap = m.captures.length > 0 ? ` ✕${m.captures.length}` : '';
+    log(`Компʼютер: (${m.from_row},${m.from_col})→(${m.to_row},${m.to_col})${cap}`, 'ai');
+  }
+
+  draw(); updateCounters();
+
+  if (data.game_over && data.game_over !== false) {
+    state.gameOver = true;
+    const w = data.game_over.winner;
+    const msg = w==='draw' ? 'Нічия!' : (w===state.human ? 'Ви виграли!' : 'Компʼютер виграв!');
+    setStatus(msg, 'game-over');
+    log(msg, 'sys');
+  } else {
+    state.turn  = state.human;
+    state.legal = await fetchLegal();
+    if (!state.legal.length) {
+      setStatus('Немає ходів — ви програли!', 'game-over');
+      state.gameOver = true;
+    } else {
+      setStatus(`Ваш хід (${state.human==='black'?'чорні ⚫':'білі ⚪'})`, 'your-turn');
+    }
+  }
+}
+
+function initialBoard() {
+  const b = [];
+  for (let i=1; i<=64; i++) {
+    const r=Math.floor((i-1)/8)+1, c=(i-1)%8+1;
+    if ((r+c)%2===0) b.push('none');
+    else if (r<=3)   b.push('black');
+    else if (r>=6)   b.push('white');
+    else             b.push('empty');
+  }
+  return b;
+}
+
+state.board = initialBoard();
+draw();
+</script>
+</body>
+</html>
