@@ -1,1 +1,1 @@
-# checkers-minmax-prolog_katerina-demianik
+# Шашки +MinMax (Alpha–Beta). Порівняння з імперативною реалізацією 
