@@ -178,9 +178,18 @@
 </div>
 
 <div id="panel">
-  <h1>Шашки <span>vs Компʼютер</span></h1>
+  <h1>Шашки <span id="mode-label">vs Компʼютер</span></h1>
 
   <div class="card">
+    <div class="card-title">Режим гри</div>
+    <select id="mode-select">
+      <option value="human-vs-ai" selected>Людина проти Компʼютера</option>
+      <option value="human-vs-human">Людина проти Людини</option>
+      <option value="ai-vs-ai">Компʼютер проти Компʼютера</option>
+    </select>
+  </div>
+
+  <div class="card" id="color-card">
     <div class="card-title">Ваш колір</div>
     <select id="player-select">
       <option value="black">⚫ Чорні (ходять першими)</option>
@@ -188,7 +197,17 @@
     </select>
   </div>
 
+  <div class="card">
+    <div class="card-title">Складність</div>
+    <select id="difficulty-select">
+      <option value="easy">Легко (глибина 2)</option>
+      <option value="normal" selected>Нормально (адаптивна 4/7)</option>
+      <option value="hard">Важко (глибина 7)</option>
+    </select>
+  </div>
+
   <button id="btn-new">▶ Нова гра</button>
+  <button id="btn-surrender" style="display:none;width:100%;background:#c0392b;color:#fff;border:none;border-radius:8px;padding:12px 14px;font-size:0.9rem;font-weight:600;cursor:pointer;font-family:inherit;letter-spacing:0.02em;margin-top:-4px;">🏳 Здатися</button>
 
   <div class="card">
     <div class="card-title">Рахунок</div>
@@ -210,8 +229,8 @@
     <div class="card-title">Правила</div>
     <div class="rule-item"><span class="rule-icon">↗</span> Обов'язкове взяття</div>
     <div class="rule-item"><span class="rule-icon">⛓</span> Ланцюгові взяття</div>
-    <div class="rule-item"><span class="rule-icon">♛</span> Дамка — вся діагональ</div>
-    <div class="rule-item"><span class="rule-icon">=</span> Нічия після 100 ходів</div>
+    <div class="rule-item"><span class="rule-icon">♛</span> Дамка — хід у будь-якому напрямку</div>
+    <div class="rule-item"><span class="rule-icon">=</span> Нічия після 100 напівходів</div>
   </div>
 
   <div id="log">Журнал ходів...</div>
@@ -238,6 +257,7 @@ let state = {
   turn: 'black', selected: null, legal: [],
   highlights: [], moveCount: 0,
   gameOver: false, thinking: false,
+  gameMode: 'human-vs-ai',
 };
 
 const canvas = document.getElementById('canvas');
@@ -423,7 +443,7 @@ async function fetchLegal() {
   } catch(e) { log('Помилка: '+e.message); return []; }
 }
 
-async function sendMove(fr, fc, tr, tc) {
+async function sendMove(fr, fc, tr, tc, captures) {
   try {
     const r = await fetch(`${API}/move`, {
       method: 'POST',
@@ -432,6 +452,9 @@ async function sendMove(fr, fc, tr, tc) {
         board: state.board, player: state.human,
         move_count: state.moveCount,
         from_row: fr, from_col: fc, to_row: tr, to_col: tc,
+        captures: captures || [],
+        difficulty: document.getElementById('difficulty-select').value,
+        game_mode: state.gameMode,
       }),
     });
     return await r.json();
@@ -440,7 +463,28 @@ async function sendMove(fr, fc, tr, tc) {
 
 /* ---- Обробники ---- */
 
+document.getElementById('mode-select').addEventListener('change', () => {
+  const mode = document.getElementById('mode-select').value;
+  const colorCard = document.getElementById('color-card');
+  const diffCard  = document.getElementById('difficulty-select').closest('.card');
+  const label     = document.getElementById('mode-label');
+  if (mode === 'human-vs-human') {
+    colorCard.style.display = 'none';
+    diffCard.style.display = 'none';
+    label.textContent = 'vs Людина';
+  } else if (mode === 'ai-vs-ai') {
+    colorCard.style.display = 'none';
+    diffCard.style.display = '';
+    label.textContent = 'Компʼютер vs Компʼютер';
+  } else {
+    colorCard.style.display = '';
+    diffCard.style.display = '';
+    label.textContent = 'vs Компʼютер';
+  }
+});
+
 document.getElementById('btn-new').addEventListener('click', async () => {
+  state.gameMode  = document.getElementById('mode-select').value;
   state.human     = document.getElementById('player-select').value;
   state.ai        = state.human === 'black' ? 'white' : 'black';
   state.turn      = 'black';
@@ -451,13 +495,36 @@ document.getElementById('btn-new').addEventListener('click', async () => {
   state.board = initialBoard();
   draw(); updateCounters();
 
-  if (state.human === 'white') {
-    await aiOnlyMove();
-  } else {
+  if (state.gameMode === 'ai-vs-ai') {
+    document.getElementById('btn-surrender').style.display = 'none';
+    log('Нова гра: Компʼютер vs Компʼютер', 'sys');
+    await aiVsAiLoop();
+  } else if (state.gameMode === 'human-vs-human') {
+    document.getElementById('btn-surrender').style.display = 'block';
     state.legal = await fetchLegal();
-    setStatus('Ваш хід — оберіть чорну шашку', 'your-turn');
-    log('Нова гра. Ви — чорні ⚫', 'sys');
+    setStatus('Хід чорних — оберіть шашку', 'your-turn');
+    log('Нова гра: Людина vs Людина', 'sys');
+  } else {
+    document.getElementById('btn-surrender').style.display = 'block';
+    if (state.human === 'white') {
+      await aiOnlyMove();
+    } else {
+      state.legal = await fetchLegal();
+      setStatus('Ваш хід — оберіть чорну шашку', 'your-turn');
+      log('Нова гра. Ви — чорні ⚫', 'sys');
+    }
   }
+});
+
+document.getElementById('btn-surrender').addEventListener('click', () => {
+  if (state.gameOver || !state.board || state.thinking) return;
+  state.gameOver = true;
+  const loser = state.turn;
+  const winner = loser === 'black' ? 'white' : 'black';
+  const msg = (winner === 'black' ? 'Чорні' : 'Білі') + ' перемогли!';
+  setStatus('Гравець здався. ' + msg, 'game-over');
+  log('Гравець здався', 'sys');
+  document.getElementById('btn-surrender').style.display = 'none';
 });
 
 async function aiOnlyMove() {
@@ -471,6 +538,8 @@ async function aiOnlyMove() {
         board: state.board, player: state.human,
         move_count: state.moveCount,
         from_row: -1, from_col: -1, to_row: -1, to_col: -1,
+        difficulty: document.getElementById('difficulty-select').value,
+        game_mode: state.gameMode,
       }),
     });
     const data = await resp.json();
@@ -479,13 +548,60 @@ async function aiOnlyMove() {
   state.thinking = false;
 }
 
+async function aiVsAiLoop() {
+  state.thinking = true;
+  while (!state.gameOver) {
+    const who = state.turn === 'black' ? 'чорні' : 'білі';
+    setStatus(`Компʼютер (${who}) думає…`, 'thinking');
+    draw();
+    try {
+      const resp = await fetch(`${API}/move`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          board: state.board, player: state.turn,
+          move_count: state.moveCount,
+          from_row: -1, from_col: -1, to_row: -1, to_col: -1,
+          difficulty: document.getElementById('difficulty-select').value,
+          game_mode: 'ai-vs-ai',
+        }),
+      });
+      const data = await resp.json();
+      if (!data) break;
+      state.board     = data.board;
+      state.moveCount = data.move_count;
+      if (data.ai_move && data.ai_move !== null) {
+        const m = data.ai_move;
+        const cap = m.captures.length > 0 ? ` ✕${m.captures.length}` : '';
+        log(`${who}: (${m.from_row},${m.from_col})→(${m.to_row},${m.to_col})${cap}`, 'ai');
+      }
+      state.turn = state.turn === 'black' ? 'white' : 'black';
+      draw(); updateCounters();
+      if (data.game_over && data.game_over !== false) {
+        state.gameOver = true;
+        const w = data.game_over.winner;
+        const msg = w === 'draw' ? 'Нічия!' : (w === 'black' ? 'Чорні перемогли!' : 'Білі перемогли!');
+        setStatus(msg, 'game-over');
+        log(msg, 'sys');
+        break;
+      }
+      await new Promise(r => setTimeout(r, 500));
+    } catch(e) { log('Помилка: '+e.message); break; }
+  }
+  state.thinking = false;
+}
+
 canvas.addEventListener('click', async (e) => {
   if (state.gameOver || state.thinking || !state.board) return;
-  if (state.turn !== state.human) return;
+  if (state.gameMode === 'ai-vs-ai') return;
+
+  // In human-vs-human, the active player is state.turn; in human-vs-ai, it's state.human
+  const activePlayer = state.gameMode === 'human-vs-human' ? state.turn : state.human;
+
   const { r, c } = rcFromEvent(e);
   const v = cellVal(r, c);
 
-  if (v && v !== 'empty' && v !== 'none' && v.startsWith(state.human)) {
+  if (v && v !== 'empty' && v !== 'none' && v.startsWith(activePlayer)) {
     state.selected = { r, c };
     state.highlights = state.legal.filter(m => m.from_row===r && m.from_col===c);
     draw();
@@ -495,19 +611,60 @@ canvas.addEventListener('click', async (e) => {
   if (state.selected) {
     const m = state.highlights.find(mv => mv.to_row===r && mv.to_col===c);
     if (m) {
-      // 1. Одразу застосовуємо хід людини локально і перемальовуємо
+      // Apply move locally for instant feedback
       state.board = applyMoveLocally(state.board, m);
       state.moveCount++;
       state.selected = null; state.highlights = [];
-      log('Ваш хід', 'user');
+      const who = activePlayer === 'black' ? 'Чорні' : 'Білі';
+      log(`${who}: (${m.from_row},${m.from_col})→(${m.to_row},${m.to_col})`, 'user');
       draw(); updateCounters();
 
-      // 2. Надсилаємо на сервер — тепер тільки чекаємо хід комп'ютера
-      state.thinking = true;
-      setStatus("Комп'ютер думає…", 'thinking');
-      const data = await sendMove(m.from_row, m.from_col, m.to_row, m.to_col);
-      if (data) await processResponse(data, true); // true = хід людини вже відображено
-      state.thinking = false;
+      if (state.gameMode === 'human-vs-human') {
+        // Send move to server for validation + game-over check
+        state.thinking = true;
+        const resp = await fetch(`${API}/move`, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({
+            board: state.board, player: activePlayer,
+            move_count: state.moveCount,
+            from_row: m.from_row, from_col: m.from_col,
+            to_row: m.to_row, to_col: m.to_col,
+            captures: m.captures,
+            game_mode: 'human-vs-human',
+          }),
+        });
+        const data = await resp.json();
+        state.thinking = false;
+        if (data && data.game_over && data.game_over !== false) {
+          state.gameOver = true;
+          document.getElementById('btn-surrender').style.display = 'none';
+          const w = data.game_over.winner;
+          const msg = w === 'draw' ? 'Нічия!' : (w === 'black' ? 'Чорні перемогли!' : 'Білі перемогли!');
+          setStatus(msg, 'game-over');
+          log(msg, 'sys');
+        } else {
+          // Switch turn
+          state.turn = state.turn === 'black' ? 'white' : 'black';
+          state.legal = await fetchLegal();
+          const nextWho = state.turn === 'black' ? 'чорних' : 'білих';
+          if (!state.legal.length) {
+            state.gameOver = true;
+            const winner = state.turn === 'black' ? 'white' : 'black';
+            const wMsg = (winner === 'black' ? 'Чорні' : 'Білі') + ' перемогли!';
+            setStatus('Немає ходів — ' + wMsg, 'game-over');
+          } else {
+            setStatus(`Хід ${nextWho} — оберіть шашку`, 'your-turn');
+          }
+        }
+      } else {
+        // human-vs-ai: send move and wait for AI response
+        state.thinking = true;
+        setStatus("Комп'ютер думає…", 'thinking');
+        const data = await sendMove(m.from_row, m.from_col, m.to_row, m.to_col, m.captures);
+        if (data) await processResponse(data, true);
+        state.thinking = false;
+      }
     } else {
       state.selected = null; state.highlights = [];
       draw();
@@ -554,6 +711,7 @@ async function processResponse(data, humanAlreadyShown) {
 
   if (data.game_over && data.game_over !== false) {
     state.gameOver = true;
+    document.getElementById('btn-surrender').style.display = 'none';
     const w = data.game_over.winner;
     const msg = w==='draw' ? 'Нічия!' : (w===state.human ? 'Ви виграли!' : 'Компʼютер виграв!');
     setStatus(msg, 'game-over');
