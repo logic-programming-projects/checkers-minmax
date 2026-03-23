@@ -345,6 +345,11 @@ def best_move(board: Board, player: str) -> Optional[Move]:
     return best_mv
 
 
+def _win_val(winner: str, root: str) -> int:
+    """Значення перемоги: +INF якщо переможець = root, -INF інакше."""
+    return INF if winner == root else -INF
+
+
 def ab_max(
     board: Board, current: str, root: str,
     depth: int, alpha: int, beta: int
@@ -360,23 +365,21 @@ def ab_max(
         alpha   — поточна альфа-межа
         beta    — поточна бета-межа
     """
-    # Термінальна умова
-    winner = board.game_over(current)
-    if winner:
-        if winner == root:   return INF
-        if winner == "draw": return 0
-        return -INF
-
     if depth == 0:
         return board.evaluate(root)
+    if board.move_count > 100:
+        return 0
+
+    opp = "white" if current == "black" else "black"
+
+    if not board._has_piece(current):
+        return _win_val(opp, root)
 
     moves = board.all_legal_moves(current)
     if not moves:
-        return board.evaluate(root)
+        return _win_val(opp, root)
 
-    opp = "white" if current == "black" else "black"
     val = -INF
-
     for m in moves:
         nb   = board.apply_move(m)
         val  = max(val, ab_min(nb, opp, root, depth - 1, alpha, beta))
@@ -396,22 +399,21 @@ def ab_min(
 
     Параметри — аналогічні до ab_max.
     """
-    winner = board.game_over(current)
-    if winner:
-        if winner == root:   return INF
-        if winner == "draw": return 0
-        return -INF
-
     if depth == 0:
         return board.evaluate(root)
+    if board.move_count > 100:
+        return 0
+
+    opp = "white" if current == "black" else "black"
+
+    if not board._has_piece(current):
+        return _win_val(opp, root)
 
     moves = board.all_legal_moves(current)
     if not moves:
-        return board.evaluate(root)
+        return _win_val(opp, root)
 
-    opp = "white" if current == "black" else "black"
     val = INF
-
     for m in moves:
         nb  = board.apply_move(m)
         val = min(val, ab_max(nb, opp, root, depth - 1, alpha, beta))
