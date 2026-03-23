@@ -248,7 +248,7 @@ check_game_over(Board, NextPlayer, MC, Result) :-
 % Non-meaningful: requires ground difficulty atom.
 difficulty_depth(easy, _, 2).
 difficulty_depth(hard, _, 7).
-difficulty_depth(normal, MC, D) :- adaptive_depth(MC, D).
+difficulty_depth(normal, MC, D) :- alphabeta:adaptive_depth(MC, D).
 
 % find_move(++Moves, ++FR, ++FC, ++TR, ++TC, ?Caps, --Move)
 % Finds a move in the list matching the given from/to coordinates and
