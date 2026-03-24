@@ -280,14 +280,14 @@ abBest [m] board player mc depth alpha beta =
   let nb  = applyMove board m
       mc1 = mc + 1
       opp = opponent player
-      val = abMin nb opp player mc1 depth alpha beta
+      val = abMin nb opp player mc1 (depth - 1) alpha beta
   in (val, m)
 -- Клауза 2: кілька ходів — перебір з відсіканням
 abBest (m:rest) board player mc depth alpha beta =
   let nb     = applyMove board m
       mc1    = mc + 1
       opp    = opponent player
-      val    = abMin nb opp player mc1 depth alpha beta
+      val    = abMin nb opp player mc1 (depth - 1) alpha beta
       alpha1 = if val > alpha then val else alpha
   in if alpha1 >= beta
      then (val, m)                -- бета-відсікання: цей хід спричинив його
