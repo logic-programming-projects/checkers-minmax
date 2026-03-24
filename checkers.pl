@@ -3,7 +3,7 @@
 % checkers.pl — Логіка гри в шашки (English Draughts)
 %
 % Board representation:
-%   A list of 64 atoms (index 1..64 for nth1).
+%   A compound term b/64 (index 1..64 for arg/3).
 %   Position (R, C) -> index = (R-1)*8 + C.
 %   Dark (playable) squares: (R+C) mod 2 =:= 1.
 %
@@ -29,7 +29,9 @@
     has_piece/2,
     game_over/3,
     evaluate/3,
+    total_pieces/2,
     strings_to_board/2,
+    board_to_list/2,
     move_to_dict/2
 ]).
 
@@ -59,31 +61,27 @@ valid_pos(R, C) :-
 
 % get_cell(++Board, ++R, ++C, -V)
 % Reads the value of a cell at position (R, C) on the board.
+% Uses arg/3 for O(1) access into the compound term.
 %
 % Meaningful modes:
 %   get_cell(++, ++, ++, --)  — read cell value
 %   get_cell(++, ++, ++, +)   — verify cell value
-% Non-meaningful: Board must be a ground list.
+% Non-meaningful: Board must be a ground compound.
 get_cell(Board, R, C, V) :-
     cell_idx(R, C, I),
-    nth1(I, Board, V).
+    arg(I, Board, V).
 
 % set_cell(++Board, ++R, ++C, ++V, --NewBoard)
 % Sets the cell at position (R, C) to value V, producing a new board.
+% Copies the compound term and destructively updates the target cell.
 %
 % Meaningful modes:
 %   set_cell(++, ++, ++, ++, --)  — produce new board with updated cell
 % Non-meaningful: requires ground board and value.
 set_cell(Board, R, C, V, NB) :-
     cell_idx(R, C, I),
-    setnth1(I, Board, V, NB).
-
-% setnth1(++N, ++List, ++V, --NewList)
-% Replaces the N-th element of List with V.
-setnth1(1, [_|T], V, [V|T]) :- !.
-setnth1(N, [H|T], V, [H|R]) :-
-    N > 1, N1 is N - 1,
-    setnth1(N1, T, V, R).
+    duplicate_term(Board, NB),
+    nb_setarg(I, NB, V).
 
 % ---- Initial board state ----
 
@@ -97,7 +95,8 @@ setnth1(N, [H|T], V, [H|R]) :-
 % Black pawns occupy rows 1-3, white pawns occupy rows 6-8.
 initial_board(Board) :-
     numlist(1, 64, Is),
-    maplist(init_cell_val, Is, Board).
+    maplist(init_cell_val, Is, Cells),
+    Board =.. [b | Cells].
 
 % init_cell_val(++I, --V)
 % Determines the initial cell value by linear index.
@@ -463,6 +462,16 @@ piece_value(Board, Player, Score) :-
     ),
     Score is MatVal + CentBonus + AdvBonus.
 
+% total_pieces(++Board, --N)
+% Counts the total number of pieces (both players) on the board.
+%
+% Meaningful modes:
+%   total_pieces(++, --) — count all pieces
+% Non-meaningful: requires ground board.
+total_pieces(Board, N) :-
+    findall(1, (valid_pos(R,C), get_cell(Board,R,C,P), belongs_to(P,_)), Ps),
+    length(Ps, N).
+
 /** <examples>
 ?- initial_board(B), evaluate(B, black, S).
 S = 0.
@@ -471,13 +480,23 @@ S = 0.
 % ---- JSON conversion ----
 
 % strings_to_board(++Strings, --Board)
-% Converts a list of JSON strings (or atoms) to a board list of atoms.
+% Converts a list of JSON strings (or atoms) to a board compound term.
 %
 % Meaningful modes:
-%   strings_to_board(++, --)  — convert string list to atom list
+%   strings_to_board(++, --)  — convert string list to board compound
 % Non-meaningful: requires ground string list.
 strings_to_board(Strings, Board) :-
-    maplist(normalize_cell, Strings, Board).
+    maplist(normalize_cell, Strings, Cells),
+    Board =.. [b | Cells].
+
+% board_to_list(++Board, --List)
+% Converts a board compound term back to a flat list of atoms.
+%
+% Meaningful modes:
+%   board_to_list(++, --)  — convert board compound to list
+% Non-meaningful: requires ground board.
+board_to_list(Board, List) :-
+    Board =.. [b | List].
 
 % normalize_cell(+S, -A)
 % Normalises a string or atom to an atom.
@@ -510,7 +529,7 @@ cap_to_dict(R-C, cap{row:R, col:C}).
 
 /** <examples>
 ?- strings_to_board(["black", "none"], B).
-B = [black,none].
+B = b(black,none).
 
 ?- move_to_dict(move(3-2, 5-4, [4-3]), D).
 D = move{captures:[cap{col:3,row:4}],from_col:2,from_row:3,to_col:4,to_row:5}.

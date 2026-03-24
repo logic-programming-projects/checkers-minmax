@@ -119,7 +119,8 @@ handle_move(Request) :-
     (   handle_mode(GameMode, Body, Board, Player, OtherPlayer, MoveCount,
                     FR, FC, TR, TC, Difficulty,
                     FinalBoard, AIMoveDict, GoResult, MC2)
-    ->  maplist(atom_string, FinalBoard, FinalStrings),
+    ->  board_to_list(FinalBoard, FinalList),
+        maplist(atom_string, FinalList, FinalStrings),
         reply_json_dict(_{
             board:      FinalStrings,
             ai_move:    AIMoveDict,
@@ -144,7 +145,7 @@ handle_move(Request) :-
 handle_mode('ai-vs-ai', _Body, Board, Player, OtherPlayer, MC,
             _FR, _FC, _TR, _TC, Difficulty,
             FinalBoard, AIMoveDict, GoResult, MC2) :-
-    difficulty_depth(Difficulty, MC, SearchDepth),
+    difficulty_depth(Difficulty, Board, MC, SearchDepth),
     (   best_move(Board, Player, MC, SearchDepth, AIMove)
     ->  apply_move(Board, AIMove, Board1),
         MC1 is MC + 1,
@@ -198,7 +199,7 @@ handle_mode(_, Body, Board, Human, AI, MC,
     ->  GoResult = _{winner: draw},
         FinalBoard = Board1, AIMoveDict = null, MC2 = MC1
     ;   % AI move
-        difficulty_depth(Difficulty, MC1, SearchDepth),
+        difficulty_depth(Difficulty, Board1, MC1, SearchDepth),
         (   best_move(Board1, AI, MC1, SearchDepth, AIMove)
         ->  apply_move(Board1, AIMove, Board2),
             MC2 is MC1 + 1,
@@ -238,15 +239,17 @@ check_game_over(Board, NextPlayer, MC, Result) :-
     ;   Result = false
     ).
 
-% difficulty_depth(++Difficulty, ++MoveCount, --Depth)
+% difficulty_depth(++Difficulty, ++Board, ++MoveCount, --Depth)
 % Maps a difficulty setting to an alpha-beta search depth.
+% For normal difficulty, uses board-aware adaptive depth that reduces
+% search depth in late endgame positions.
 %
 % Meaningful modes:
-%   difficulty_depth(++, ++, --) — compute search depth
+%   difficulty_depth(++, ++, ++, --) — compute search depth
 % Non-meaningful: requires ground difficulty atom.
-difficulty_depth(easy, _, 3).
-difficulty_depth(hard, _, 8).
-difficulty_depth(normal, MC, D) :- alphabeta:adaptive_depth(MC, D).
+difficulty_depth(easy, _, _, 3).
+difficulty_depth(hard, _, _, 8).
+difficulty_depth(normal, Board, MC, D) :- alphabeta:adaptive_depth(Board, MC, D).
 
 % find_move(++Moves, ++FR, ++FC, ++TR, ++TC, ?Caps, --Move)
 % Finds a move in the list matching the given from/to coordinates and

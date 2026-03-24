@@ -25,6 +25,7 @@ inf(9999).
 
 % adaptive_depth(++MoveCount, --Depth)
 % Computes search depth based on the current game phase.
+% Uses move count as a heuristic (no board access).
 %
 % Opening (first 6 moves): depth 5 half-moves for fast response.
 % Midgame and endgame: depth 8 half-moves for stronger play.
@@ -35,6 +36,19 @@ inf(9999).
 % Non-meaningful: arithmetic requires ground MoveCount.
 adaptive_depth(MC, Depth) :-
     ( MC < 6 -> Depth = 5 ; Depth = 8 ).
+
+% adaptive_depth(++Board, ++MoveCount, --Depth)
+% Board-aware variant: reduces depth in late endgame (<=6 pieces)
+% to avoid multi-second searches on sparse king-heavy boards.
+%
+% Meaningful modes:
+%   adaptive_depth(++, ++, --) — compute depth from board and move count
+% Non-meaningful: requires ground board and move count.
+adaptive_depth(Board, MC, Depth) :-
+    (   MC < 6 -> Depth = 5
+    ;   total_pieces(Board, N), N =< 6 -> Depth = 6
+    ;   Depth = 8
+    ).
 
 /** <examples>
 ?- adaptive_depth(0, D).
@@ -62,7 +76,8 @@ best_move(Board, Player, MoveCount, BestMove) :-
 % best_move(++Board, ++Player, ++MoveCount, ++Depth, --BestMove)
 % Finds the best move for Player at a given explicit search depth.
 %
-% Generates all legal moves, then selects the best via alpha-beta search.
+% Generates all legal moves, orders them by static evaluation for better
+% alpha-beta pruning, then selects the best via search.
 % Fails if no legal moves exist.
 %
 % Meaningful modes:
@@ -72,14 +87,51 @@ best_move(Board, Player, MoveCount, BestMove) :-
 best_move(Board, Player, MoveCount, Depth, BestMove) :-
     all_legal_moves(Board, Player, Moves),
     Moves \= [],
+    order_moves(Board, Player, desc, Moves, Ordered),
     inf(Inf), NegInf is -Inf,
-    ab_best(Moves, Board, Player, MoveCount, Depth,
+    ab_best(Ordered, Board, Player, MoveCount, Depth,
             NegInf, Inf, _, BestMove).
 
 /** <examples>
 ?- initial_board(B), best_move(B, black, 0, BM).
 BM = move(3-2,4-3,[]).
 */
+
+% ============================================================
+% Move ordering — improves alpha-beta pruning by searching likely-best
+% moves first. Sorts by static evaluation of the resulting board.
+% ============================================================
+
+% maybe_order(++Board, ++Root, ++Dir, ++Moves, ++Depth, --Ordered)
+% Applies move ordering only at the top levels of the search tree (Depth >= 4)
+% where the pruning benefit outweighs the evaluation overhead.
+% At deeper levels, moves are left in their original order.
+%
+% Meaningful modes:
+%   maybe_order(++, ++, ++, ++, ++, --) — conditionally sort moves
+% Non-meaningful: all inputs must be ground.
+maybe_order(Board, Root, Dir, Moves, Depth, Ordered) :-
+    (   Depth >= 4
+    ->  order_moves(Board, Root, Dir, Moves, Ordered)
+    ;   Ordered = Moves
+    ).
+
+% order_moves(++Board, ++Root, ++Dir, ++Moves, --Sorted)
+% Sorts Moves by static evaluation. Dir = desc for MAX nodes, asc for MIN.
+%
+% Meaningful modes:
+%   order_moves(++, ++, ++, ++, --) — sort moves by heuristic
+% Non-meaningful: all inputs must be ground.
+order_moves(Board, Root, Dir, Moves, Sorted) :-
+    maplist(score_move(Board, Root), Moves, Scored),
+    (Dir = desc -> sort(1, @>=, Scored, Pairs) ; sort(1, @=<, Scored, Pairs)),
+    pairs_values(Pairs, Sorted).
+
+% score_move(++Board, ++Root, ++Move, --Score-Move)
+% Evaluates a move by applying it and computing the static score.
+score_move(Board, Root, Move, Score-Move) :-
+    apply_move(Board, Move, NB),
+    evaluate(NB, Root, Score).
 
 % ============================================================
 % ab_best(++Moves, ++Board, ++Player, ++MC, ++Depth,
@@ -151,7 +203,8 @@ ab_max(Board, Player, RootPlayer, MC, Depth, Alpha, Beta, Val) :-
         ->  opponent(Player, W),
             (W = RootPlayer -> inf(Val) ; inf(Inf), Val is -Inf)
         ;   opponent(Player, Opp),
-            ab_max_list(Moves, Board, Player, Opp, RootPlayer,
+            maybe_order(Board, RootPlayer, desc, Moves, Depth, Ordered),
+            ab_max_list(Ordered, Board, Player, Opp, RootPlayer,
                         MC, Depth, Alpha, Beta, Val)
         )
     ).
@@ -208,7 +261,8 @@ ab_min(Board, Player, RootPlayer, MC, Depth, Alpha, Beta, Val) :-
         ->  opponent(Player, W),
             (W = RootPlayer -> inf(Val) ; inf(Inf), Val is -Inf)
         ;   opponent(Player, Opp),
-            ab_min_list(Moves, Board, Player, Opp, RootPlayer,
+            maybe_order(Board, RootPlayer, asc, Moves, Depth, Ordered),
+            ab_min_list(Ordered, Board, Player, Opp, RootPlayer,
                         MC, Depth, Alpha, Beta, Val)
         )
     ).
