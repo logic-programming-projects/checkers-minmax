@@ -37,12 +37,12 @@
 
 % ---- Board helper predicates ----
 
-% cell_idx(++R, ++C, -I)
+% cell_idx(++R, ++C, ?I)
 % Computes the 1-based list index for a board position (R, C).
 %
 % Meaningful modes:
-%   cell_idx(++, ++, --)  — compute index from row and column
-%   cell_idx(++, ++, +)   — verify that a given index matches (R, C)
+%   cell_idx(++, ++, -)  — compute index from row and column
+%   cell_idx(++, ++, +)  — verify that a given index matches (R, C)
 % Non-meaningful: arithmetic requires ground R and C.
 cell_idx(R, C, I) :- I is (R-1)*8 + C.
 
@@ -51,22 +51,23 @@ cell_idx(R, C, I) :- I is (R-1)*8 + C.
 %
 % Meaningful modes:
 %   valid_pos(?, ?)  — generate all 32 dark squares
-%   valid_pos(+, +)  — check if (R, C) is a dark square
-%   valid_pos(+, +)  — existence check: non-trivial, fails for light squares
+%   valid_pos(+, ?)  — generate dark-square columns for a given row
+%   valid_pos(?, +)  — generate dark-square rows for a given column
+%   valid_pos(+, +)  — check if (R, C) is a dark square; fails for light squares
 % Non-meaningful: all modes are meaningful.
 valid_pos(R, C) :-
     between(1, 8, R),
     between(1, 8, C),
     (R + C) mod 2 =:= 1.
 
-% get_cell(++Board, ++R, ++C, -V)
+% get_cell(++Board, ++R, ++C, ?V)
 % Reads the value of a cell at position (R, C) on the board.
 % Uses arg/3 for O(1) access into the compound term.
 %
 % Meaningful modes:
-%   get_cell(++, ++, ++, --)  — read cell value
-%   get_cell(++, ++, ++, +)   — verify cell value
-% Non-meaningful: Board must be a ground compound.
+%   get_cell(++, ++, ++, -)  — read cell value
+%   get_cell(++, ++, ++, +)  — verify cell value
+% Non-meaningful: R and C must be ground for arithmetic; Board must be a ground compound.
 get_cell(Board, R, C, V) :-
     cell_idx(R, C, I),
     arg(I, Board, V).
@@ -77,7 +78,7 @@ get_cell(Board, R, C, V) :-
 %
 % Meaningful modes:
 %   set_cell(++, ++, ++, ++, --)  — produce new board with updated cell
-% Non-meaningful: requires ground board and value.
+% Non-meaningful: requires ground board, R, C (arithmetic), and value; nb_setarg requires fresh output.
 set_cell(Board, R, C, V, NB) :-
     cell_idx(R, C, I),
     duplicate_term(Board, NB),
@@ -85,12 +86,13 @@ set_cell(Board, R, C, V, NB) :-
 
 % ---- Initial board state ----
 
-% initial_board(--Board)
+% initial_board(?Board)
 % Generates the standard starting board for English Draughts.
 %
 % Meaningful modes:
 %   initial_board(--)  — generate the initial board
-% Non-meaningful: always succeeds (trivial existence).
+%   initial_board(+)   — verify a board is the initial state
+% Non-meaningful: all modes are meaningful.
 %
 % Black pawns occupy rows 1-3, white pawns occupy rows 6-8.
 initial_board(Board) :-
@@ -98,8 +100,13 @@ initial_board(Board) :-
     maplist(init_cell_val, Is, Cells),
     Board =.. [b | Cells].
 
-% init_cell_val(++I, --V)
+% init_cell_val(++I, ?V)
 % Determines the initial cell value by linear index.
+%
+% Meaningful modes:
+%   init_cell_val(++, --)  — compute cell value from index
+%   init_cell_val(++, +)   — verify cell value for index
+% Non-meaningful: arithmetic requires ground I.
 init_cell_val(I, V) :-
     R is (I - 1) // 8 + 1,
     C is (I - 1) mod 8 + 1,
@@ -129,10 +136,11 @@ V = empty.
 % Determines which player owns a given piece.
 %
 % Meaningful modes:
-%   belongs_to(+, -)   — look up the owner of a piece
-%   belongs_to(-, +)   — enumerate pieces belonging to a player
-%   belongs_to(+, +)   — verify piece-player association
-%   belongs_to(+, _)   — existence check: non-trivial, fails for empty/none
+%   belongs_to(?, ?)  — enumerate all piece-player pairs
+%   belongs_to(+, -)  — look up the owner of a piece
+%   belongs_to(-, +)  — enumerate pieces belonging to a player
+%   belongs_to(+, +)  — verify piece-player association
+%   belongs_to(+, _)  — existence check: non-trivial, fails for empty/none
 % Non-meaningful: all modes are meaningful.
 belongs_to(black,      black).
 belongs_to(black_king, black).
@@ -143,49 +151,56 @@ belongs_to(white_king, white).
 % Maps a player to their opponent.
 %
 % Meaningful modes:
+%   opponent(?, ?)  — enumerate all player-opponent pairs
 %   opponent(+, -)  — look up the opponent
 %   opponent(-, +)  — reverse look up
 %   opponent(+, +)  — verify opponent relationship
-% Non-meaningful: all modes are meaningful. Trivial existence for black/white.
+% Non-meaningful: all modes are meaningful. Existence is trivial for ground inputs.
 opponent(black, white).
 opponent(white, black).
 
-% is_king(+Piece)
+% is_king(?Piece)
 % Checks whether a piece is a king.
 %
 % Meaningful modes:
-%   is_king(+)  — check if piece is a king
-%   is_king(+)  — existence check: non-trivial, fails for regular pieces
-% Non-meaningful: only (+) is meaningful.
+%   is_king(-)  — enumerate king pieces (black_king, white_king)
+%   is_king(+)  — check if piece is a king; fails for regular pieces
+% Non-meaningful: all modes are meaningful.
 is_king(black_king).
 is_king(white_king).
 
-% pawn_dr(++Player, --DR)
+% pawn_dr(?Player, ?DR)
 % Returns the row direction of movement for a player's pawns.
 %
 % Meaningful modes:
-%   pawn_dr(++, --)  — get forward direction
-%   pawn_dr(++, +)   — verify direction
-% Non-meaningful: fixed facts only.
+%   pawn_dr(?, ?)  — enumerate all player-direction pairs
+%   pawn_dr(+, -)  — get forward direction for a player
+%   pawn_dr(-, +)  — find which player moves in a given direction
+%   pawn_dr(+, +)  — verify player-direction association
+% Non-meaningful: all modes are meaningful. Existence is trivial for ground inputs.
 pawn_dr(black,  1).   % black moves down (towards row 8)
 pawn_dr(white, -1).   % white moves up (towards row 1)
 
-% promo_row(++Player, --Row)
+% promo_row(?Player, ?Row)
 % Returns the promotion row for a player's pawns.
 %
 % Meaningful modes:
-%   promo_row(++, --)  — get promotion row
-%   promo_row(++, +)   — verify promotion row
-% Non-meaningful: fixed facts only.
+%   promo_row(?, ?)  — enumerate all player-promotion row pairs
+%   promo_row(+, -)  — get promotion row for a player
+%   promo_row(-, +)  — find which player promotes at a given row
+%   promo_row(+, +)  — verify player-promotion row association
+% Non-meaningful: all modes are meaningful. Existence is trivial for ground inputs.
 promo_row(black, 8).
 promo_row(white, 1).
 
-% piece_dirs(++Piece, --Dirs)
+% piece_dirs(++Piece, ?Dirs)
 % Returns the list of diagonal movement directions for a piece.
 %
 % Meaningful modes:
 %   piece_dirs(++, --)  — get movement directions
-% Non-meaningful: requires ground piece.
+%   piece_dirs(++, +)   — verify movement directions
+%   piece_dirs(++, _)   — existence check: non-trivial, fails for empty/none
+% Non-meaningful: requires ground piece (is_king/1 and belongs_to/2 need it).
 %
 % Kings move in all 4 diagonals; pawns move in 2 forward diagonals.
 piece_dirs(P, Dirs) :-
@@ -196,13 +211,13 @@ piece_dirs(P, Dirs) :-
         Dirs = [DR-1, DR-(-1)]                     % pawn: 2 forward diagonals
     ).
 
-% maybe_promote(++Piece, ++Row, --NewPiece)
+% maybe_promote(++Piece, ++Row, ?NewPiece)
 % Promotes a pawn to a king if it reaches the promotion row.
 %
 % Meaningful modes:
-%   maybe_promote(++, ++, --)  — compute (possibly promoted) piece
-%   maybe_promote(++, ++, +)   — verify promotion result
-% Non-meaningful: arithmetic requires ground terms.
+%   maybe_promote(++, ++, -)  — compute (possibly promoted) piece
+%   maybe_promote(++, ++, +)  — verify promotion result
+% Non-meaningful: arithmetic requires ground Piece and Row.
 maybe_promote(P, R, NP) :-
     belongs_to(P, Pl),
     promo_row(Pl, PR),
@@ -247,7 +262,8 @@ all_legal_moves(Board, Player, Moves) :-
 %
 % Meaningful modes:
 %   simple_move(++, ++, --)  — generate a simple move via backtracking
-% Non-meaningful: board must be ground.
+%   simple_move(++, ++, _)   — existence check: non-trivial, fails when no simple moves exist
+% Non-meaningful: board and player must be ground for cell access and piece lookup.
 simple_move(Board, Player, move(R1-C1, R2-C2, [])) :-
     valid_pos(R1, C1),
     get_cell(Board, R1, C1, P),
@@ -263,7 +279,8 @@ simple_move(Board, Player, move(R1-C1, R2-C2, [])) :-
 %
 % Meaningful modes:
 %   capture_move(++, ++, --)  — generate a capture move via backtracking
-% Non-meaningful: board must be ground.
+%   capture_move(++, ++, _)   — existence check: non-trivial, fails when no captures exist
+% Non-meaningful: board and player must be ground for cell access and piece lookup.
 capture_move(Board, Player, move(R1-C1, RF-CF, Caps)) :-
     valid_pos(R1, C1),
     get_cell(Board, R1, C1, P),
@@ -276,7 +293,7 @@ capture_move(Board, Player, move(R1-C1, RF-CF, Caps)) :-
 %
 % Meaningful modes:
 %   jump_chain(++, ++, ++, ++, ++, ++, --, --, --)  — build capture chain
-% Non-meaningful: arithmetic requires all inputs ground.
+% Non-meaningful: arithmetic requires all inputs ground. Always succeeds (trivial existence).
 %
 % Clause 1: perform a jump and continue the chain.
 jump_chain(Board, Player, P, R, C, Used,
@@ -312,9 +329,8 @@ jump_chain(Board, Player, P, R, C, Used, [], R, C) :-
 % Checks whether a jump is possible from the current position.
 %
 % Meaningful modes:
-%   can_jump(++, ++, ++, ++, ++, ++)  — check jump possibility
-%   can_jump(++, ++, ++, ++, ++, ++)  — existence check: non-trivial, fails when no jump possible
-% Non-meaningful: all inputs must be ground.
+%   can_jump(++, ++, ++, ++, ++, ++)  — check jump possibility; fails when no jump possible
+% Non-meaningful: all inputs must be ground for arithmetic and cell access.
 can_jump(Board, Player, P, R, C, Used) :-
     piece_dirs(P, Dirs),
     member(DR-DC, Dirs),
@@ -372,14 +388,14 @@ V = black.
 
 % ---- Game termination ----
 
-% game_over(++Board, ++Player, -Result)
+% game_over(++Board, ++Player, ?Result)
 % Determines whether the game is over for the given player.
 %
 % Meaningful modes:
-%   game_over(++, ++, --)  — detect game-over and get result
-%   game_over(++, ++, +)   — verify a specific game-over result
-%   game_over(++, ++, _)   — existence check: non-trivial, fails if game continues
-% Non-meaningful: board and player must be ground.
+%   game_over(++, ++, -)  — detect game-over and get result
+%   game_over(++, ++, +)  — verify a specific game-over result
+%   game_over(++, ++, _)  — existence check: non-trivial, fails if game continues
+% Non-meaningful: board and player must be ground for move generation and piece checks.
 %
 % The game ends when the player has no pieces or no legal moves.
 % Result is win(Winner) where Winner is the opponent.
@@ -393,9 +409,9 @@ game_over(Board, Player, win(Winner)) :-
 % Checks whether the player has at least one piece on the board.
 %
 % Meaningful modes:
-%   has_piece(++, +)  — check if player has pieces
-%   has_piece(++, +)  — existence check: non-trivial, fails if no pieces
-% Non-meaningful: board must be ground.
+%   has_piece(++, +)  — check if player has pieces; fails if no pieces
+%   has_piece(++, _)  — existence check: non-trivial, fails on an empty board
+% Non-meaningful: board must be ground for cell access.
 has_piece(Board, Player) :-
     valid_pos(R, C),
     get_cell(Board, R, C, P),
@@ -408,12 +424,12 @@ false.
 
 % ---- Static position evaluation ----
 
-% evaluate(++Board, ++Player, -Score)
+% evaluate(++Board, ++Player, ?Score)
 % Computes a static evaluation score for the given player's position.
 %
 % Meaningful modes:
-%   evaluate(++, ++, --)  — compute numeric evaluation score
-%   evaluate(++, ++, +)   — verify a specific score
+%   evaluate(++, ++, -)  — compute numeric evaluation score
+%   evaluate(++, ++, +)  — verify a specific score
 % Non-meaningful: arithmetic requires ground board and player.
 %
 % Positive score favours the given player.
@@ -427,12 +443,13 @@ evaluate(Board, Player, Score) :-
     material_score(Board, Opp,    OppScore),
     Score is MyScore - OppScore.
 
-% material_score(++Board, ++Player, --Score)
+% material_score(++Board, ++Player, ?Score)
 % Computes the total material and positional score for a player.
 %
 % Meaningful modes:
-%   material_score(++, ++, --)  — compute total score
-% Non-meaningful: requires ground board and player.
+%   material_score(++, ++, -)  — compute total score
+%   material_score(++, ++, +)  — verify total score
+% Non-meaningful: requires ground board and player for cell access and piece lookup.
 material_score(Board, Player, Score) :-
     findall(S, piece_value(Board, Player, S), Vals),
     sum_list(Vals, Score).
@@ -442,7 +459,8 @@ material_score(Board, Player, Score) :-
 %
 % Meaningful modes:
 %   piece_value(++, ++, --)  — compute score for one piece via backtracking
-% Non-meaningful: requires ground board and player.
+%   piece_value(++, ++, _)   — existence check: non-trivial, fails if player has no pieces
+% Non-meaningful: requires ground board and player for arithmetic and cell access.
 piece_value(Board, Player, Score) :-
     valid_pos(R, C),
     get_cell(Board, R, C, P),
@@ -462,12 +480,13 @@ piece_value(Board, Player, Score) :-
     ),
     Score is MatVal + CentBonus + AdvBonus.
 
-% total_pieces(++Board, --N)
+% total_pieces(++Board, ?N)
 % Counts the total number of pieces (both players) on the board.
 %
 % Meaningful modes:
-%   total_pieces(++, --) — count all pieces
-% Non-meaningful: requires ground board.
+%   total_pieces(++, -) — count all pieces
+%   total_pieces(++, +) — verify piece count
+% Non-meaningful: requires ground board for cell access.
 total_pieces(Board, N) :-
     findall(1, (valid_pos(R,C), get_cell(Board,R,C,P), belongs_to(P,_)), Ps),
     length(Ps, N).
@@ -479,52 +498,58 @@ S = 0.
 
 % ---- JSON conversion ----
 
-% strings_to_board(++Strings, --Board)
+% strings_to_board(++Strings, ?Board)
 % Converts a list of JSON strings (or atoms) to a board compound term.
 %
 % Meaningful modes:
 %   strings_to_board(++, --)  — convert string list to board compound
-% Non-meaningful: requires ground string list.
+%   strings_to_board(++, +)   — verify board matches string list
+% Non-meaningful: requires ground string list for normalize_cell.
 strings_to_board(Strings, Board) :-
     maplist(normalize_cell, Strings, Cells),
     Board =.. [b | Cells].
 
-% board_to_list(++Board, --List)
+% board_to_list(?Board, ?List)
 % Converts a board compound term back to a flat list of atoms.
 %
 % Meaningful modes:
 %   board_to_list(++, --)  — convert board compound to list
-% Non-meaningful: requires ground board.
+%   board_to_list(--, ++)  — construct board compound from list
+%   board_to_list(++, +)   — verify list matches board
+% Non-meaningful: at least one argument must be ground (=.. requires it).
 board_to_list(Board, List) :-
     Board =.. [b | List].
 
-% normalize_cell(+S, -A)
+% normalize_cell(+S, ?A)
 % Normalises a string or atom to an atom.
 %
 % Meaningful modes:
 %   normalize_cell(+, -)  — convert to atom
-% Non-meaningful: input must be ground.
+%   normalize_cell(+, +)  — verify atom matches input
+% Non-meaningful: input must be ground for atom/string dispatch.
 normalize_cell(S, A) :-
     (atom(S) -> A = S ; atom_string(A, S)).
 
-% move_to_dict(++Move, --Dict)
+% move_to_dict(++Move, ?Dict)
 % Converts a move term to a dictionary suitable for JSON serialisation.
 %
 % Meaningful modes:
 %   move_to_dict(++, --)  — convert move to dict
-% Non-meaningful: requires ground move.
+%   move_to_dict(++, +)   — verify dict matches move
+% Non-meaningful: requires ground move for field extraction.
 move_to_dict(move(R1-C1, R2-C2, Caps), Dict) :-
     maplist(cap_to_dict, Caps, CapsJson),
     Dict = move{from_row:R1, from_col:C1,
                 to_row:R2,   to_col:C2,
                 captures:CapsJson}.
 
-% cap_to_dict(++RC, --Dict)
+% cap_to_dict(++RC, ?Dict)
 % Converts a capture position R-C to a dictionary.
 %
 % Meaningful modes:
 %   cap_to_dict(++, --)  — convert capture to dict
-% Non-meaningful: requires ground position.
+%   cap_to_dict(++, +)   — verify dict matches capture position
+% Non-meaningful: requires ground position for field extraction.
 cap_to_dict(R-C, cap{row:R, col:C}).
 
 /** <examples>

@@ -217,20 +217,21 @@ handle_mode(_, Body, Board, Human, AI, MC,
 %
 % Meaningful modes:
 %   extract_caps(++, -) — extract captures from dict
-% Non-meaningful: dict must be ground. Always succeeds (trivial existence).
+% Non-meaningful: dict must be ground for get_dict. Always succeeds (trivial existence).
 extract_caps(Body, Caps) :-
     (   get_dict(captures, Body, CapsJson)
     ->  maplist(cap_from_dict, CapsJson, Caps)
     ;   true  % Caps remains unbound
     ).
 
-% check_game_over(++Board, ++NextPlayer, ++MC, --Result)
+% check_game_over(++Board, ++NextPlayer, ++MC, ?Result)
 % Checks game-over after a move. NextPlayer is the one who moves next.
 % Returns a winner dict, draw, or false.
 %
 % Meaningful modes:
-%   check_game_over(++, ++, ++, --) — compute game-over result
-% Non-meaningful: requires ground board. Always succeeds (trivial existence).
+%   check_game_over(++, ++, ++, -)  — compute game-over result
+%   check_game_over(++, ++, ++, +)  — verify game-over result
+% Non-meaningful: requires ground board, player, and move count. Always succeeds (trivial existence).
 check_game_over(Board, NextPlayer, MC, Result) :-
     (   game_over(Board, NextPlayer, win(W))
     ->  Result = _{winner: W}
@@ -239,14 +240,16 @@ check_game_over(Board, NextPlayer, MC, Result) :-
     ;   Result = false
     ).
 
-% difficulty_depth(++Difficulty, ++Board, ++MoveCount, --Depth)
+% difficulty_depth(++Difficulty, ++Board, ++MoveCount, ?Depth)
 % Maps a difficulty setting to an alpha-beta search depth.
 % For normal difficulty, uses board-aware adaptive depth that reduces
 % search depth in late endgame positions.
 %
 % Meaningful modes:
-%   difficulty_depth(++, ++, ++, --) — compute search depth
-% Non-meaningful: requires ground difficulty atom.
+%   difficulty_depth(++, ++, ++, -)  — compute search depth
+%   difficulty_depth(++, ++, ++, +)  — verify search depth
+%   difficulty_depth(++, ++, ++, _)  — existence check: non-trivial, fails for unknown difficulty
+% Non-meaningful: requires ground difficulty, board (for total_pieces), and move count (arithmetic).
 difficulty_depth(easy, _, _, 3).
 difficulty_depth(hard, _, _, 8).
 difficulty_depth(normal, Board, MC, D) :- alphabeta:adaptive_depth(Board, MC, D).
@@ -258,19 +261,19 @@ difficulty_depth(normal, Board, MC, D) :- alphabeta:adaptive_depth(Board, MC, D)
 %
 % Meaningful modes:
 %   find_move(++, ++, ++, ++, ++, ?, --) — find matching move
-% Existence check:
-%   find_move(++, ++, ++, ++, ++, ?, _)  — non-trivial, fails if no
-%     matching move exists in the list.
+%   find_move(++, ++, ++, ++, ++, ?, _)  — existence check: non-trivial, fails if no match
+% Non-meaningful: requires ground move list and coordinates for matching.
 find_move([M|_], FR, FC, TR, TC, Caps, M) :-
     M = move(FR-FC, TR-TC, Caps), !.
 find_move([_|Rest], FR, FC, TR, TC, Caps, M) :-
     find_move(Rest, FR, FC, TR, TC, Caps, M).
 
-% cap_from_dict(++Dict, --RC)
+% cap_from_dict(++Dict, ?RC)
 % Converts a JSON capture dict {row: R, col: C} to an R-C pair.
 %
 % Meaningful modes:
-%   cap_from_dict(++, --) — extract row-col pair from dict
-% Non-meaningful: dict must be ground.
+%   cap_from_dict(++, --)  — extract row-col pair from dict
+%   cap_from_dict(++, +)   — verify row-col pair matches dict
+% Non-meaningful: dict must be ground for field access.
 cap_from_dict(Dict, R-C) :-
     R = Dict.row, C = Dict.col.

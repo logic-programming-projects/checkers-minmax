@@ -15,15 +15,16 @@
 
 :- use_module(checkers).
 
-% inf(-Val)
+% inf(?Val)
 % Returns the infinity constant used for alpha-beta bounds.
 %
 % Meaningful modes:
-%   inf(-) — get the infinity constant
-% Non-meaningful: trivial existence; always succeeds.
+%   inf(-)  — get the infinity constant
+%   inf(+)  — verify a value is the infinity constant
+% Non-meaningful: all modes are meaningful. Existence is trivial.
 inf(9999).
 
-% adaptive_depth(++MoveCount, --Depth)
+% adaptive_depth(++MoveCount, ?Depth)
 % Computes search depth based on the current game phase.
 % Uses move count as a heuristic (no board access).
 %
@@ -31,19 +32,20 @@ inf(9999).
 % Midgame and endgame: depth 8 half-moves for stronger play.
 %
 % Meaningful modes:
-%   adaptive_depth(++, --) — compute depth from move count
+%   adaptive_depth(++, -)  — compute depth from move count
 %   adaptive_depth(++, +)  — verify expected depth
 % Non-meaningful: arithmetic requires ground MoveCount.
 adaptive_depth(MC, Depth) :-
     ( MC < 6 -> Depth = 5 ; Depth = 8 ).
 
-% adaptive_depth(++Board, ++MoveCount, --Depth)
+% adaptive_depth(++Board, ++MoveCount, ?Depth)
 % Board-aware variant: reduces depth in late endgame (<=6 pieces)
 % to avoid multi-second searches on sparse king-heavy boards.
 %
 % Meaningful modes:
-%   adaptive_depth(++, ++, --) — compute depth from board and move count
-% Non-meaningful: requires ground board and move count.
+%   adaptive_depth(++, ++, -)  — compute depth from board and move count
+%   adaptive_depth(++, ++, +)  — verify expected depth
+% Non-meaningful: requires ground board (for total_pieces) and move count (arithmetic).
 adaptive_depth(Board, MC, Depth) :-
     (   MC < 6 -> Depth = 5
     ;   total_pieces(Board, N), N =< 6 -> Depth = 6
@@ -109,7 +111,7 @@ BM = move(3-2,4-3,[]).
 %
 % Meaningful modes:
 %   maybe_order(++, ++, ++, ++, ++, --) — conditionally sort moves
-% Non-meaningful: all inputs must be ground.
+% Non-meaningful: all inputs must be ground for evaluation and arithmetic. Always succeeds (trivial existence).
 maybe_order(Board, Root, Dir, Moves, Depth, Ordered) :-
     (   Depth >= 4
     ->  order_moves(Board, Root, Dir, Moves, Ordered)
@@ -121,7 +123,7 @@ maybe_order(Board, Root, Dir, Moves, Depth, Ordered) :-
 %
 % Meaningful modes:
 %   order_moves(++, ++, ++, ++, --) — sort moves by heuristic
-% Non-meaningful: all inputs must be ground.
+% Non-meaningful: all inputs must be ground for evaluation and sorting. Always succeeds (trivial existence).
 order_moves(Board, Root, Dir, Moves, Sorted) :-
     maplist(score_move(Board, Root), Moves, Scored),
     (Dir = desc -> sort(1, @>=, Scored, Pairs) ; sort(1, @=<, Scored, Pairs)),
@@ -129,6 +131,10 @@ order_moves(Board, Root, Dir, Moves, Sorted) :-
 
 % score_move(++Board, ++Root, ++Move, --Score-Move)
 % Evaluates a move by applying it and computing the static score.
+%
+% Meaningful modes:
+%   score_move(++, ++, ++, --) — compute scored pair for a move
+% Non-meaningful: all inputs must be ground for apply_move and evaluate.
 score_move(Board, Root, Move, Score-Move) :-
     apply_move(Board, Move, NB),
     evaluate(NB, Root, Score).
@@ -143,7 +149,7 @@ score_move(Board, Root, Move, Score-Move) :-
 %
 % Meaningful modes:
 %   ab_best(++, ++, ++, ++, ++, ++, ++, --, --) — select best move from list
-% Non-meaningful: all inputs must be ground for alpha-beta search.
+% Non-meaningful: all inputs must be ground for alpha-beta search. Always succeeds when list is non-empty.
 % ============================================================
 
 % Clause 1: single move — no comparison needed
@@ -188,7 +194,7 @@ ab_best([M|Rest], Board, Player, MC, Depth, Alpha, Beta, BestVal, BestMove) :-
 %
 % Meaningful modes:
 %   ab_max(++, ++, ++, ++, ++, ++, ++, --) — compute MAX-node value
-% Non-meaningful: all inputs must be ground for alpha-beta search.
+% Non-meaningful: all inputs must be ground for alpha-beta search. Always succeeds (trivial existence).
 % ============================================================
 ab_max(Board, Player, RootPlayer, MC, Depth, Alpha, Beta, Val) :-
     (   Depth =:= 0
@@ -219,7 +225,7 @@ ab_max(Board, Player, RootPlayer, MC, Depth, Alpha, Beta, Val) :-
 %
 % Meaningful modes:
 %   ab_max_list(++, ++, ++, ++, ++, ++, ++, ++, ++, --) — iterate MAX-node moves
-% Non-meaningful: all inputs must be ground for alpha-beta search.
+% Non-meaningful: all inputs must be ground for alpha-beta search. Always succeeds (trivial existence).
 ab_max_list([], _, _, _, _, _, _, Alpha, _, Alpha).
 ab_max_list([M|Rest], Board, Player, Opp, Root, MC, Depth, Alpha, Beta, Val) :-
     apply_move(Board, M, NB),
@@ -246,7 +252,7 @@ ab_max_list([M|Rest], Board, Player, Opp, Root, MC, Depth, Alpha, Beta, Val) :-
 %
 % Meaningful modes:
 %   ab_min(++, ++, ++, ++, ++, ++, ++, --) — compute MIN-node value
-% Non-meaningful: all inputs must be ground for alpha-beta search.
+% Non-meaningful: all inputs must be ground for alpha-beta search. Always succeeds (trivial existence).
 % ============================================================
 ab_min(Board, Player, RootPlayer, MC, Depth, Alpha, Beta, Val) :-
     (   Depth =:= 0
@@ -277,7 +283,7 @@ ab_min(Board, Player, RootPlayer, MC, Depth, Alpha, Beta, Val) :-
 %
 % Meaningful modes:
 %   ab_min_list(++, ++, ++, ++, ++, ++, ++, ++, ++, --) — iterate MIN-node moves
-% Non-meaningful: all inputs must be ground for alpha-beta search.
+% Non-meaningful: all inputs must be ground for alpha-beta search. Always succeeds (trivial existence).
 ab_min_list([], _, _, _, _, _, _, _, Beta, Beta).
 ab_min_list([M|Rest], Board, Player, Opp, Root, MC, Depth, Alpha, Beta, Val) :-
     apply_move(Board, M, NB),
