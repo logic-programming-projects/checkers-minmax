@@ -3,13 +3,17 @@
 ## Структура проекту
 
 ```
-checkers.pl         — логіка гри (дошка, генерація ходів, оцінка)
-alphabeta.pl        — Компʼютер: алгоритм MinMax з Alpha-Beta відсіканням
-server.pl           — HTTP-сервер (порт 5500)
-index.html          — веб-інтерфейс
-checkers_python.py  — порівняльна реалізація (Python, консоль)
-Checkers.hs         — порівняльна реалізація (Haskell, бібліотека)
-checkers_haskell.hs — порівняльна реалізація (Haskell, консоль)
+prolog/
+  checkers.pl         — логіка гри (дошка, генерація ходів, оцінка)
+  alphabeta.pl        — Компʼютер: алгоритм MinMax з Alpha-Beta відсіканням
+  server.pl           — HTTP-сервер (порт 5500)
+  index.html          — веб-інтерфейс
+python/
+  checkers_python.py  — порівняльна реалізація (Python, консоль)
+  checkers_gui.py     — порівняльна реалізація (Python, GUI)
+haskell/
+  Checkers.hs         — порівняльна реалізація (Haskell, бібліотека)
+  checkers_haskell.hs — порівняльна реалізація (Haskell, консоль)
 ```
 
 ## Запуск Prolog-версії (веб-інтерфейс)
@@ -21,6 +25,7 @@ checkers_haskell.hs — порівняльна реалізація (Haskell, к
 
 ```bash
 # 1. Запустити сервер
+cd prolog
 swipl server.pl
 
 # Виведе: Starting checkers server on http://localhost:5500/
@@ -34,6 +39,7 @@ http://localhost:5500/
 ## Запуск Python-версії (консоль)
 
 ```bash
+cd python
 python checkers_python.py
 ```
 
@@ -48,6 +54,8 @@ python checkers_python.py
 ### Кроки
 
 ```bash
+cd haskell
+
 # 1. Скомпілювати
 ghc -O2 Checkers.hs checkers_haskell.hs -o checkers_haskell
 
