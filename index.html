@@ -167,6 +167,20 @@
   #log .log-ai   { color: #c0392b; }
   #log .log-user { color: #2c7a2c; }
   #log .log-sys  { color: #aaa; }
+
+  input[type="range"] {
+    width: 100%;
+    cursor: pointer;
+    accent-color: #2c2c2c;
+    margin-top: 4px;
+  }
+  .speed-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.78rem;
+    color: #888;
+    margin-top: 4px;
+  }
 </style>
 </head>
 <body>
@@ -204,6 +218,16 @@
       <option value="normal" selected>Нормально (адаптивна 5/8)</option>
       <option value="hard">Важко (8 напівходів)</option>
     </select>
+  </div>
+
+  <div class="card" id="speed-card" style="display:none">
+    <div class="card-title">Швидкість (затримка)</div>
+    <input type="range" id="speed-slider" min="0" max="2000" step="100" value="500">
+    <div class="speed-label">
+      <span>0 мс</span>
+      <span id="speed-value">500 мс</span>
+      <span>2000 мс</span>
+    </div>
   </div>
 
   <button id="btn-new">▶ Нова гра</button>
@@ -256,7 +280,7 @@ let state = {
   board: null, human: 'black', ai: 'white',
   turn: 'black', selected: null, legal: [],
   highlights: [], moveCount: 0,
-  gameOver: false, thinking: false,
+  gameOver: false, thinking: false, paused: false,
   gameMode: 'human-vs-ai',
 };
 
@@ -463,22 +487,30 @@ async function sendMove(fr, fc, tr, tc, captures, board, mc) {
 
 /* ---- Обробники ---- */
 
+document.getElementById('speed-slider').addEventListener('input', () => {
+  document.getElementById('speed-value').textContent = document.getElementById('speed-slider').value + ' мс';
+});
+
 document.getElementById('mode-select').addEventListener('change', () => {
   const mode = document.getElementById('mode-select').value;
   const colorCard = document.getElementById('color-card');
   const diffCard  = document.getElementById('difficulty-select').closest('.card');
+  const speedCard = document.getElementById('speed-card');
   const label     = document.getElementById('mode-label');
   if (mode === 'human-vs-human') {
     colorCard.style.display = 'none';
     diffCard.style.display = 'none';
+    speedCard.style.display = 'none';
     label.textContent = 'vs Людина';
   } else if (mode === 'ai-vs-ai') {
     colorCard.style.display = 'none';
     diffCard.style.display = '';
+    speedCard.style.display = '';
     label.textContent = 'Компʼютер vs Компʼютер';
   } else {
     colorCard.style.display = '';
     diffCard.style.display = '';
+    speedCard.style.display = 'none';
     label.textContent = 'vs Компʼютер';
   }
 });
@@ -489,22 +521,26 @@ document.getElementById('btn-new').addEventListener('click', async () => {
   state.ai        = state.human === 'black' ? 'white' : 'black';
   state.turn      = 'black';
   state.moveCount = 0;
-  state.gameOver  = state.thinking = false;
+  state.gameOver  = state.thinking = state.paused = false;
   state.selected  = null; state.highlights = [];
   clearLog();
   state.board = initialBoard();
   draw(); updateCounters();
 
   if (state.gameMode === 'ai-vs-ai') {
-    document.getElementById('btn-surrender').style.display = 'none';
+    const btn = document.getElementById('btn-surrender');
+    btn.textContent = '\u23F8 Пауза';
+    btn.style.display = 'block';
     log('Нова гра: Компʼютер vs Компʼютер', 'sys');
     await aiVsAiLoop();
   } else if (state.gameMode === 'human-vs-human') {
+    document.getElementById('btn-surrender').textContent = '\uD83C\uDFF3 Здатися';
     document.getElementById('btn-surrender').style.display = 'block';
     state.legal = await fetchLegal();
     setStatus('Хід чорних — оберіть шашку', 'your-turn');
     log('Нова гра: Людина vs Людина', 'sys');
   } else {
+    document.getElementById('btn-surrender').textContent = '\uD83C\uDFF3 Здатися';
     document.getElementById('btn-surrender').style.display = 'block';
     if (state.human === 'white') {
       await aiOnlyMove();
@@ -517,7 +553,21 @@ document.getElementById('btn-new').addEventListener('click', async () => {
 });
 
 document.getElementById('btn-surrender').addEventListener('click', () => {
-  if (state.gameOver || !state.board || state.thinking) return;
+  if (state.gameOver || !state.board) return;
+  if (state.gameMode === 'ai-vs-ai') {
+    const btn = document.getElementById('btn-surrender');
+    state.paused = !state.paused;
+    if (state.paused) {
+      btn.textContent = '\u25B6 Продовжити';
+      setStatus('Гру призупинено', 'thinking');
+      log('Пауза', 'sys');
+    } else {
+      btn.textContent = '\u23F8 Пауза';
+      log('Продовжено', 'sys');
+    }
+    return;
+  }
+  if (state.thinking) return;
   state.gameOver = true;
   const loser = state.turn;
   const winner = loser === 'black' ? 'white' : 'black';
@@ -551,6 +601,10 @@ async function aiOnlyMove() {
 async function aiVsAiLoop() {
   state.thinking = true;
   while (!state.gameOver) {
+    while (state.paused && !state.gameOver) {
+      await new Promise(r => setTimeout(r, 100));
+    }
+    if (state.gameOver) break;
     const who = state.turn === 'black' ? 'чорні' : 'білі';
     setStatus(`Компʼютер (${who}) думає…`, 'thinking');
     draw();
@@ -585,10 +639,12 @@ async function aiVsAiLoop() {
         log(msg, 'sys');
         break;
       }
-      await new Promise(r => setTimeout(r, 500));
+      const delay = parseInt(document.getElementById('speed-slider').value, 10);
+      if (delay > 0) await new Promise(r => setTimeout(r, delay));
     } catch(e) { log('Помилка: '+e.message); break; }
   }
   state.thinking = false;
+  document.getElementById('btn-surrender').style.display = 'none';
 }
 
 canvas.addEventListener('click', async (e) => {
