@@ -3,8 +3,8 @@
 % alphabeta.pl — MinMax algorithm with Alpha-Beta pruning
 %
 % Implements best-move search for the computer player.
-% Search depth is adaptive: 4 in the opening (MC < 6),
-% 7 in the midgame and endgame.
+% Search depth is adaptive: 5 half-moves in the opening (MC < 6),
+% 8 half-moves in the midgame and endgame.
 %
 % Evaluation scale:
 %   +inf (9999)  — win for the root player
@@ -26,23 +26,22 @@ inf(9999).
 % adaptive_depth(++MoveCount, --Depth)
 % Computes search depth based on the current game phase.
 %
-% Opening (first 6 moves): depth 4 for fast response.
-% Midgame and endgame: depth 7 for stronger play.
-% Mirrors Python constants SEARCH_DEPTH_OPENING=4, SEARCH_DEPTH_MAIN=7.
+% Opening (first 6 moves): depth 5 half-moves for fast response.
+% Midgame and endgame: depth 8 half-moves for stronger play.
 %
 % Meaningful modes:
 %   adaptive_depth(++, --) — compute depth from move count
 %   adaptive_depth(++, +)  — verify expected depth
 % Non-meaningful: arithmetic requires ground MoveCount.
 adaptive_depth(MC, Depth) :-
-    ( MC < 6 -> Depth = 4 ; Depth = 7 ).
+    ( MC < 6 -> Depth = 5 ; Depth = 8 ).
 
 /** <examples>
 ?- adaptive_depth(0, D).
-D = 4.
+D = 5.
 
 ?- adaptive_depth(10, D).
-D = 7.
+D = 8.
 */
 
 % ============================================================
@@ -99,15 +98,17 @@ BM = move(3-2,4-3,[]).
 ab_best([M], Board, Player, MC, Depth, Alpha, Beta, Val, M) :- !,
     apply_move(Board, M, NB),
     MC1 is MC + 1,
+    Depth1 is Depth - 1,
     opponent(Player, Opp),
-    ab_min(NB, Opp, Player, MC1, Depth, Alpha, Beta, Val).
+    ab_min(NB, Opp, Player, MC1, Depth1, Alpha, Beta, Val).
 
 % Clause 2: multiple moves — iterate with pruning
 ab_best([M|Rest], Board, Player, MC, Depth, Alpha, Beta, BestVal, BestMove) :-
     apply_move(Board, M, NB),
     MC1 is MC + 1,
+    Depth1 is Depth - 1,
     opponent(Player, Opp),
-    ab_min(NB, Opp, Player, MC1, Depth, Alpha, Beta, Val),
+    ab_min(NB, Opp, Player, MC1, Depth1, Alpha, Beta, Val),
     (   Val > Alpha -> Alpha1 = Val ; Alpha1 = Alpha ),
     (   Alpha1 >= Beta
     ->  BestVal = Val, BestMove = M          % beta cutoff: this move caused it
@@ -140,7 +141,7 @@ ab_best([M|Rest], Board, Player, MC, Depth, Alpha, Beta, BestVal, BestMove) :-
 ab_max(Board, Player, RootPlayer, MC, Depth, Alpha, Beta, Val) :-
     (   Depth =:= 0
     ->  evaluate(Board, RootPlayer, Val)
-    ;   MC > 100
+    ;   MC >= 100
     ->  Val = 0
     ;   \+ has_piece(Board, Player)
     ->  opponent(Player, W),
@@ -197,7 +198,7 @@ ab_max_list([M|Rest], Board, Player, Opp, Root, MC, Depth, Alpha, Beta, Val) :-
 ab_min(Board, Player, RootPlayer, MC, Depth, Alpha, Beta, Val) :-
     (   Depth =:= 0
     ->  evaluate(Board, RootPlayer, Val)
-    ;   MC > 100
+    ;   MC >= 100
     ->  Val = 0
     ;   \+ has_piece(Board, Player)
     ->  opponent(Player, W),

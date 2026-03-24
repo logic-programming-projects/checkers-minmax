@@ -116,19 +116,18 @@ handle_move(Request) :-
     (get_dict(game_mode, Body, ModeStr) -> atom_string(GameMode, ModeStr)   ; GameMode = 'human-vs-ai'),
 
     % --- Dispatch by game mode ---
-    handle_mode(GameMode, Body, Board, Player, OtherPlayer, MoveCount,
-                FR, FC, TR, TC, Difficulty,
-                FinalBoard, AIMoveDict, GoResult, MC2),
-
-    % --- Convert board to strings for JSON ---
-    maplist(atom_string, FinalBoard, FinalStrings),
-
-    reply_json_dict(_{
-        board:      FinalStrings,
-        ai_move:    AIMoveDict,
-        game_over:  GoResult,
-        move_count: MC2
-    }).
+    (   handle_mode(GameMode, Body, Board, Player, OtherPlayer, MoveCount,
+                    FR, FC, TR, TC, Difficulty,
+                    FinalBoard, AIMoveDict, GoResult, MC2)
+    ->  maplist(atom_string, FinalBoard, FinalStrings),
+        reply_json_dict(_{
+            board:      FinalStrings,
+            ai_move:    AIMoveDict,
+            game_over:  GoResult,
+            move_count: MC2
+        })
+    ;   reply_json_dict(_{error: "Illegal move"}, [status(400)])
+    ).
 
 % handle_mode(++GameMode, ++Body, ++Board, ++Player, ++OtherPlayer, ++MC,
 %             ++FR, ++FC, ++TR, ++TC, ++Difficulty,
@@ -149,12 +148,15 @@ handle_mode('ai-vs-ai', _Body, Board, Player, OtherPlayer, MC,
     (   best_move(Board, Player, MC, SearchDepth, AIMove)
     ->  apply_move(Board, AIMove, Board1),
         MC1 is MC + 1,
-        move_to_dict(AIMove, AIMoveDict)
-    ;   Board1 = Board, MC1 = MC, AIMoveDict = null
-    ),
-    FinalBoard = Board1,
-    MC2 = MC1,
-    check_game_over(Board1, OtherPlayer, MC1, GoResult).
+        move_to_dict(AIMove, AIMoveDict),
+        FinalBoard = Board1,
+        MC2 = MC1,
+        check_game_over(Board1, OtherPlayer, MC1, GoResult)
+    ;   % Player has no legal moves — they lose
+        FinalBoard = Board, MC2 = MC, AIMoveDict = null,
+        opponent(Player, Winner),
+        GoResult = _{winner: Winner}
+    ).
 
 % --- Mode: human-vs-human ---
 % Player = whose turn it is. Apply their move, no AI.
@@ -166,14 +168,12 @@ handle_mode('human-vs-human', Body, Board, Player, OtherPlayer, MC,
     ->  FinalBoard = Board, MC2 = MC, GoResult = false
     ;   all_legal_moves(Board, Player, LegalMoves),
         extract_caps(Body, ReqCaps),
-        (   find_move(LegalMoves, FR, FC, TR, TC, ReqCaps, HumanMove)
-        ->  apply_move(Board, HumanMove, Board1),
-            MC1 is MC + 1,
-            FinalBoard = Board1,
-            MC2 = MC1,
-            check_game_over(Board1, OtherPlayer, MC1, GoResult)
-        ;   reply_json_dict(_{error: "Illegal move"}, [status(400)]), !
-        )
+        find_move(LegalMoves, FR, FC, TR, TC, ReqCaps, HumanMove),
+        apply_move(Board, HumanMove, Board1),
+        MC1 is MC + 1,
+        FinalBoard = Board1,
+        MC2 = MC1,
+        check_game_over(Board1, OtherPlayer, MC1, GoResult)
     ).
 
 % --- Mode: human-vs-ai (default) ---
@@ -186,17 +186,15 @@ handle_mode(_, Body, Board, Human, AI, MC,
     ->  Board1 = Board, MC1 = MC
     ;   all_legal_moves(Board, Human, LegalMoves),
         extract_caps(Body, ReqCaps),
-        (   find_move(LegalMoves, FR, FC, TR, TC, ReqCaps, HumanMove)
-        ->  apply_move(Board, HumanMove, Board1),
-            MC1 is MC + 1
-        ;   reply_json_dict(_{error: "Illegal move"}, [status(400)]), !
-        )
+        find_move(LegalMoves, FR, FC, TR, TC, ReqCaps, HumanMove),
+        apply_move(Board, HumanMove, Board1),
+        MC1 is MC + 1
     ),
     % Check game-over after human move
     (   game_over(Board1, AI, win(W1))
     ->  GoResult = _{winner: W1},
         FinalBoard = Board1, AIMoveDict = null, MC2 = MC1
-    ;   MC1 > 100
+    ;   MC1 >= 100
     ->  GoResult = _{winner: draw},
         FinalBoard = Board1, AIMoveDict = null, MC2 = MC1
     ;   % AI move
@@ -235,7 +233,7 @@ extract_caps(Body, Caps) :-
 check_game_over(Board, NextPlayer, MC, Result) :-
     (   game_over(Board, NextPlayer, win(W))
     ->  Result = _{winner: W}
-    ;   MC > 100
+    ;   MC >= 100
     ->  Result = _{winner: draw}
     ;   Result = false
     ).
@@ -246,8 +244,8 @@ check_game_over(Board, NextPlayer, MC, Result) :-
 % Meaningful modes:
 %   difficulty_depth(++, ++, --) — compute search depth
 % Non-meaningful: requires ground difficulty atom.
-difficulty_depth(easy, _, 2).
-difficulty_depth(hard, _, 7).
+difficulty_depth(easy, _, 3).
+difficulty_depth(hard, _, 8).
 difficulty_depth(normal, MC, D) :- alphabeta:adaptive_depth(MC, D).
 
 % find_move(++Moves, ++FR, ++FC, ++TR, ++TC, ?Caps, --Move)

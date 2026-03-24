@@ -85,20 +85,6 @@ setnth1(N, [H|T], V, [H|R]) :-
     N > 1, N1 is N - 1,
     setnth1(N1, T, V, R).
 
-/** <examples>
-?- valid_pos(1, 2).
-true.
-
-?- valid_pos(1, 1).
-false.
-
-?- initial_board(B), get_cell(B, 1, 2, V).
-V = black.
-
-?- initial_board(B), get_cell(B, 4, 1, V).
-V = empty.
-*/
-
 % ---- Initial board state ----
 
 % initial_board(--Board)
@@ -123,6 +109,20 @@ init_cell_val(I, V) :-
     ;   R >= 6              -> V = white    % white pawn
     ;                          V = empty    % empty playable square
     ).
+
+/** <examples>
+?- valid_pos(1, 2).
+true.
+
+?- valid_pos(1, 1).
+false.
+
+?- initial_board(B), get_cell(B, 1, 2, V).
+V = black.
+
+?- initial_board(B), get_cell(B, 4, 1, V).
+V = empty.
+*/
 
 % ---- Piece properties ----
 

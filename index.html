@@ -200,9 +200,9 @@
   <div class="card">
     <div class="card-title">Складність</div>
     <select id="difficulty-select">
-      <option value="easy">Легко (глибина 2)</option>
-      <option value="normal" selected>Нормально (адаптивна 4/7)</option>
-      <option value="hard">Важко (глибина 7)</option>
+      <option value="easy">Легко (3 напівходи)</option>
+      <option value="normal" selected>Нормально (адаптивна 5/8)</option>
+      <option value="hard">Важко (8 напівходів)</option>
     </select>
   </div>
 
@@ -238,7 +238,7 @@
 
 <script>
 const CELL = 60;
-const API  = 'http://localhost:5500/api';
+const API  = '/api';
 
 const CLR = {
   light:     '#f5ede0',
@@ -443,14 +443,14 @@ async function fetchLegal() {
   } catch(e) { log('Помилка: '+e.message); return []; }
 }
 
-async function sendMove(fr, fc, tr, tc, captures) {
+async function sendMove(fr, fc, tr, tc, captures, board, mc) {
   try {
     const r = await fetch(`${API}/move`, {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
-        board: state.board, player: state.human,
-        move_count: state.moveCount,
+        board: board, player: state.human,
+        move_count: mc,
         from_row: fr, from_col: fc, to_row: tr, to_col: tc,
         captures: captures || [],
         difficulty: document.getElementById('difficulty-select').value,
@@ -611,6 +611,10 @@ canvas.addEventListener('click', async (e) => {
   if (state.selected) {
     const m = state.highlights.find(mv => mv.to_row===r && mv.to_col===c);
     if (m) {
+      // Save original board state for the server (before local application)
+      const origBoard = [...state.board];
+      const origMC = state.moveCount;
+
       // Apply move locally for instant feedback
       state.board = applyMoveLocally(state.board, m);
       state.moveCount++;
@@ -626,8 +630,8 @@ canvas.addEventListener('click', async (e) => {
           method: 'POST',
           headers: {'Content-Type':'application/json'},
           body: JSON.stringify({
-            board: state.board, player: activePlayer,
-            move_count: state.moveCount,
+            board: origBoard, player: activePlayer,
+            move_count: origMC,
             from_row: m.from_row, from_col: m.from_col,
             to_row: m.to_row, to_col: m.to_col,
             captures: m.captures,
@@ -661,7 +665,7 @@ canvas.addEventListener('click', async (e) => {
         // human-vs-ai: send move and wait for AI response
         state.thinking = true;
         setStatus("Комп'ютер думає…", 'thinking');
-        const data = await sendMove(m.from_row, m.from_col, m.to_row, m.to_col, m.captures);
+        const data = await sendMove(m.from_row, m.from_col, m.to_row, m.to_col, m.captures, origBoard, origMC);
         if (data) await processResponse(data, true);
         state.thinking = false;
       }
